@@ -101,6 +101,7 @@ class StudentShapRequest(BaseModel):
 # ── endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/model-comparison", summary="Compare all ML model metrics")
+@router.get("/model", include_in_schema=False)
 async def model_comparison(
     current_user: User = Depends(get_current_user),
 ):
@@ -152,9 +153,10 @@ async def training_status(
 
 
 @router.post("/train-all", summary="Trigger training of all models", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/train", include_in_schema=False, status_code=status.HTTP_202_ACCEPTED)
 async def train_all_models(
     payload: TrainAllRequest,
-    current_user: User = Depends(require_role([Role.ADMIN])),
+    current_user: User = Depends(require_role(Role.ADMIN)),
 ):
     """
     Kick off training for all 3 model types (LR, RF, XGBoost).

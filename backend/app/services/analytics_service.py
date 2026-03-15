@@ -4,7 +4,7 @@ for admin/faculty dashboards.
 """
 from typing import Optional
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
@@ -32,11 +32,14 @@ async def get_cohort_overview(
 
     total_students = (await db.execute(select(func.count(Student.id)))).scalar_one()
 
+    # Attendance: AVG(CASE WHEN status='PRESENT' THEN 1 ELSE 0 END) * 100
+    # Avoids nested aggregates (not supported in PostgreSQL)
     avg_att = (await db.execute(
-        select(func.avg(
-            func.count(Attendance.id).filter(Attendance.status == AttendanceStatus.PRESENT)
-            / func.count(Attendance.id) * 100
-        ))
+        select(
+            func.avg(
+                case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)
+            ) * 100
+        )
     )).scalar_one() or 0.0
 
     avg_marks = (await db.execute(
@@ -75,20 +78,22 @@ async def get_department_stats(db: AsyncSession) -> list[DepartmentStat]:
 
     stats = []
     for row in rows:
-        att_q = select(
-            func.avg(
-                func.count(Attendance.id).filter(Attendance.status == AttendanceStatus.PRESENT) * 100.0
-                / func.nullif(func.count(Attendance.id), 0)
+        # Use CASE WHEN to avoid nested aggregates
+        att_q = (
+            select(
+                func.avg(
+                    case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)
+                ) * 100
             )
-        ).join(Student, Student.id == Attendance.student_id).where(
-            Student.department == row.department
+            .join(Student, Student.id == Attendance.student_id)
+            .where(Student.department == row.department)
         )
         avg_att = (await db.execute(att_q)).scalar_one() or 0.0
 
-        marks_q = select(
-            func.avg(AcademicRecord.score / AcademicRecord.max_score * 100)
-        ).join(Student, Student.id == AcademicRecord.student_id).where(
-            Student.department == row.department
+        marks_q = (
+            select(func.avg(AcademicRecord.score / AcademicRecord.max_score * 100))
+            .join(Student, Student.id == AcademicRecord.student_id)
+            .where(Student.department == row.department)
         )
         avg_marks = (await db.execute(marks_q)).scalar_one() or 0.0
 

@@ -41,7 +41,7 @@ async def list_students(
     search: Optional[str] = Query(None, max_length=100),
     risk_label: Optional[str] = Query(None, pattern="^(LOW|MEDIUM|HIGH)$"),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     scope: Optional[frozenset] = Depends(get_student_scope),
 ):

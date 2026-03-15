@@ -34,6 +34,7 @@ async def cohort_overview(
 
 
 @router.get("/departments", response_model=list[DepartmentStat])
+@router.get("/department-stats", response_model=list[DepartmentStat], include_in_schema=False)
 async def department_stats(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(Role.ADMIN)),

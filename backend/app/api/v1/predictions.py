@@ -46,7 +46,7 @@ async def list_predictions(
     semester: Optional[str] = Query(None),
     risk_label: Optional[str] = Query(None, pattern="^(LOW|MEDIUM|HIGH)$"),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     scope: Optional[frozenset] = Depends(get_student_scope),
 ):
@@ -127,7 +127,7 @@ async def list_alerts(
     severity: Optional[str] = Query(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$"),
     is_resolved: bool = Query(False),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     scope: Optional[frozenset] = Depends(get_student_scope),
 ):

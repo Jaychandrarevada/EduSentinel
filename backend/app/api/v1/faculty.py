@@ -65,7 +65,7 @@ async def my_students(
     department: Optional[str] = Query(None),
     semester: Optional[int] = Query(None, ge=1, le=12),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(Role.FACULTY)),
 ):
@@ -115,7 +115,7 @@ async def my_courses(
 async def my_alerts(
     is_resolved: bool = Query(False),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(Role.FACULTY)),
 ):
@@ -148,7 +148,7 @@ async def list_faculty(
     department: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(Role.ADMIN)),
 ):
@@ -259,7 +259,7 @@ async def faculty_students(
     department: Optional[str] = Query(None),
     semester: Optional[int] = Query(None, ge=1, le=12),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(Role.ADMIN)),
 ):

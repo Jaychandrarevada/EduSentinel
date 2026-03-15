@@ -17,6 +17,7 @@ from app.api.v1.data_generator import router as data_generator_router
 from app.api.v1.export import router as export_router
 from app.api.v1.ml import router as ml_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.courses import router as courses_router
 
 api_router = APIRouter()
 
@@ -33,3 +34,4 @@ api_router.include_router(faculty_router)
 api_router.include_router(export_router)            # GET  /export/student-data
 api_router.include_router(ml_router)                # GET  /ml/model-comparison, /ml/shap/*
 api_router.include_router(admin_router)             # POST /admin/seed
+api_router.include_router(courses_router)           # GET/POST/PUT/DELETE /courses
