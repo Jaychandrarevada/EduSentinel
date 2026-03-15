@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────
+#  EduSentinel – Production overrides
+#  Usage:
+#    docker compose \
+#      -f docker-compose.yml \
+#      -f docker-compose.prod.yml \
+#      up -d --build
+# ─────────────────────────────────────────────
+version: "3.9"
+
+services:
+
+  postgres:
+    ports: []             # do not expose DB port externally in prod
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+  redis:
+    ports: []             # internal only
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+
+  backend:
+    volumes: []           # no source mount – use baked image
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    ports: []             # traffic enters only via nginx
+
+  ml_service:
+    volumes:
+      - ml_artifacts:/app/artifacts   # keep model artifacts across deploys
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --workers 2
+    environment:
+      APP_ENV: production
+    ports: []
+
+  celery_worker:
+    volumes: []
+    command: celery -A app.workers.celery_app worker --loglevel=warning --concurrency=4
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+
+  celery_beat:
+    volumes: []
+    command: celery -A app.workers.celery_app beat --loglevel=warning
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runner      # final minimal production image
+    volumes: []           # no source mount
+    command: node server.js
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports: []
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+
+volumes:
+  ml_artifacts:

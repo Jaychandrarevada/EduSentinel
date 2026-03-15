@@ -1,0 +1,6 @@
+roll_no,full_name,email,department,semester,batch_year
+CS2021001,Alice Johnson,alice@example.edu,Computer Science,5,2021
+CS2021002,Bob Smith,bob@example.edu,Computer Science,5,2021
+EC2021001,Carol White,carol@example.edu,Electronics,5,2021
+ME2022001,David Brown,david@example.edu,Mechanical,3,2022
+CS2022001,Eve Davis,eve@example.edu,Computer Science,3,2022
