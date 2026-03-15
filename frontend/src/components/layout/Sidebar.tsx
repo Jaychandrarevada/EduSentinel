@@ -145,7 +145,7 @@ export default function Sidebar() {
       <div className="border-t border-gray-100 p-3">
         <div className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 text-xs font-bold text-white">
-            {user?.full_name.charAt(0).toUpperCase()}
+            {user?.full_name?.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-gray-900">{user?.full_name}</p>

@@ -29,7 +29,7 @@ export default function RiskBadge({ label, size = "md" }: Props) {
       )}
     >
       <span className={cn("h-1.5 w-1.5 rounded-full", dots[key] ?? "bg-gray-400")} />
-      {key.charAt(0) + key.slice(1).toLowerCase()}
+      {(key ?? "?").charAt(0) + (key ?? "").slice(1).toLowerCase()}
     </span>
   );
 }

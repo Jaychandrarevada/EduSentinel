@@ -225,7 +225,7 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                          {u.full_name.charAt(0)}
+                          {(u.full_name ?? "?").charAt(0)}
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{u.full_name}</p>

@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
 
           <ul className="flex flex-col divide-y divide-gray-100">
             {flaggedStudents.map((p) => {
-              const initial = p.student_name.charAt(0).toUpperCase();
+              const initial = (p.student_name ?? "?").charAt(0).toUpperCase();
               const topFactor = p.contributing_factors[0]?.feature ?? "—";
               const scoreVal = Math.round(p.risk_score * 100);
 

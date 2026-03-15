@@ -171,7 +171,7 @@ export default function StudentAnalyticsPage() {
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-xl font-bold text-white shadow-md">
-              {data.full_name.charAt(0).toUpperCase()}
+              {(data.full_name ?? "?").charAt(0).toUpperCase()}
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">{data.full_name}</h1>

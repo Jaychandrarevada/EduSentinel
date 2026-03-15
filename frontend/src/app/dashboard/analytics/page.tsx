@@ -49,7 +49,7 @@ function StudentCard({
   semester,
   prediction,
 }: StudentCardProps) {
-  const initial = name.charAt(0).toUpperCase();
+  const initial = (name ?? "?").charAt(0).toUpperCase();
 
   return (
     <Link

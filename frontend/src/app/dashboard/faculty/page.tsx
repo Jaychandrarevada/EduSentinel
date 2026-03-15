@@ -199,7 +199,7 @@ export default function FacultyDashboardPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50 text-sm">
                     {filteredPredictions.map((p) => {
-                      const initial = p.student_name.charAt(0).toUpperCase();
+                      const initial = (p.student_name ?? "?").charAt(0).toUpperCase();
                       const topFactor =
                         p.contributing_factors[0]?.feature ?? "—";
                       return (

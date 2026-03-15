@@ -32,7 +32,7 @@ export default function TopBar({ title }: Props) {
 
         {/* Avatar */}
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
-          {user?.full_name.charAt(0).toUpperCase()}
+          {user?.full_name?.charAt(0).toUpperCase()}
         </div>
       </div>
     </header>
