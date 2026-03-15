@@ -27,6 +27,7 @@ export interface Student {
   semester: number;
   batch_year: number;
   email: string;
+  phone?: string;
 }
 
 // ── Risk / Prediction ─────────────────────────
@@ -72,6 +73,7 @@ export interface CohortSummary {
   low_risk_count: number;
   avg_attendance_pct: number;
   avg_marks_pct: number;
+  unresolved_alerts?: number;
 }
 
 export interface TrendPoint {

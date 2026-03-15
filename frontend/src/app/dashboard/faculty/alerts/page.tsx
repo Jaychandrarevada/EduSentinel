@@ -44,11 +44,11 @@ export default function FacultyAlertsPage() {
       setAlerts(r.data.items ?? r.data ?? []);
     } catch {
       // Fallback demo data
-      setAlerts([
-        { id: 1, student_id: 101, student_name: "Aarav Sharma", alert_type: "HIGH_RISK_PREDICTED", severity: "HIGH", message: "Student predicted HIGH risk (score: 91%) in Sem 5. Top factor: Low Attendance.", is_resolved: false, resolved_at: null, created_at: "2024-03-10T08:00:00Z" },
-        { id: 2, student_id: 102, student_name: "Priya Nair", alert_type: "HIGH_RISK_PREDICTED", severity: "HIGH", message: "Student predicted HIGH risk (score: 85%) in Sem 5. Top factor: Missed Assignments.", is_resolved: false, resolved_at: null, created_at: "2024-03-10T08:00:00Z" },
-        { id: 3, student_id: 103, student_name: "Rohan Mehta", alert_type: "HIGH_RISK_PREDICTED", severity: "MEDIUM", message: "Student predicted MEDIUM risk (score: 48%) in Sem 5. Top factor: Low LMS engagement.", is_resolved: true, resolved_at: "2024-03-11T10:00:00Z", created_at: "2024-03-09T08:00:00Z" },
-      ].filter((a) => filter === "all" || !a.is_resolved));
+      setAlerts(([
+        { id: 1, student_id: 101, student_name: "Aarav Sharma", alert_type: "HIGH_RISK_PREDICTED", severity: "HIGH" as const, message: "Student predicted HIGH risk (score: 91%) in Sem 5. Top factor: Low Attendance.", is_resolved: false, resolved_at: null, created_at: "2024-03-10T08:00:00Z" },
+        { id: 2, student_id: 102, student_name: "Priya Nair", alert_type: "HIGH_RISK_PREDICTED", severity: "HIGH" as const, message: "Student predicted HIGH risk (score: 85%) in Sem 5. Top factor: Missed Assignments.", is_resolved: false, resolved_at: null, created_at: "2024-03-10T08:00:00Z" },
+        { id: 3, student_id: 103, student_name: "Rohan Mehta", alert_type: "HIGH_RISK_PREDICTED", severity: "MEDIUM" as const, message: "Student predicted MEDIUM risk (score: 48%) in Sem 5. Top factor: Low LMS engagement.", is_resolved: true, resolved_at: "2024-03-11T10:00:00Z", created_at: "2024-03-09T08:00:00Z" },
+      ] as AlertItem[]).filter((a) => filter === "all" || !a.is_resolved));
     } finally {
       setLoading(false);
     }
