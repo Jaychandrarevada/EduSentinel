@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",          // enables Docker multi-stage copy
+  // "standalone" output is used by Docker only; Vercel manages its own build
+  ...(process.env.BUILD_STANDALONE === "true" ? { output: "standalone" } : {}),
   reactStrictMode: true,
   poweredByHeader: false,        // hide framework fingerprint
 

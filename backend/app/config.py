@@ -41,8 +41,9 @@ class Settings(BaseSettings):
     ML_SERVICE_URL: str = "http://ml_service:8001"
     ML_REQUEST_TIMEOUT: int = 120
 
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # CORS — set to your Vercel domain in production, e.g.:
+    #   CORS_ORIGINS=["https://edusentinel.vercel.app","http://localhost:3001"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
 
     # Pagination
     DEFAULT_PAGE_SIZE: int = 20

@@ -41,13 +41,12 @@ async def lifespan(app: FastAPI):
         debug=settings.DEBUG,
     )
 
-    # In development, auto-create tables.
-    # In production, use: alembic upgrade head
-    if settings.APP_ENV == "development":
-        async with engine.begin() as conn:
-            import app.models  # noqa: F401  — ensures all models are registered
-            await conn.run_sync(Base.metadata.create_all)
-        log.info("app.db_tables_ensured")
+    # Auto-create tables on every startup (idempotent — only creates missing tables).
+    # For schema migrations in production use Alembic after initial deploy.
+    async with engine.begin() as conn:
+        import app.models  # noqa: F401  — ensures all models are registered
+        await conn.run_sync(Base.metadata.create_all)
+    log.info("app.db_tables_ensured")
 
     yield
 

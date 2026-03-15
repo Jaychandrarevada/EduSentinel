@@ -16,6 +16,7 @@ from app.api.v1.faculty import router as faculty_router
 from app.api.v1.data_generator import router as data_generator_router
 from app.api.v1.export import router as export_router
 from app.api.v1.ml import router as ml_router
+from app.api.v1.admin import router as admin_router
 
 api_router = APIRouter()
 
@@ -31,3 +32,4 @@ api_router.include_router(analytics_router)
 api_router.include_router(faculty_router)
 api_router.include_router(export_router)            # GET  /export/student-data
 api_router.include_router(ml_router)                # GET  /ml/model-comparison, /ml/shap/*
+api_router.include_router(admin_router)             # POST /admin/seed
