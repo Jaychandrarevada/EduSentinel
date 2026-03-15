@@ -114,10 +114,10 @@ export default function InsightsPage() {
     deptStats && deptStats.length > 0
       ? deptStats.map((d: DepartmentStat) => ({
           group:  d.department,
-          high:   d.high_risk,
-          medium: Math.round(d.total * 0.25),  // estimated until API provides
-          low:    d.total - d.high_risk - Math.round(d.total * 0.25),
-          total:  d.total,
+          high:   d.high_risk_count,
+          medium: Math.round(d.total_students * 0.25),
+          low:    d.total_students - d.high_risk_count - Math.round(d.total_students * 0.25),
+          total:  d.total_students,
         }))
       : RISK_CATEGORY_FALLBACK;
 

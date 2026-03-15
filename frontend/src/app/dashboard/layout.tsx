@@ -6,15 +6,23 @@ import Sidebar from "@/components/layout/Sidebar";
 import { useAuthStore } from "@/store/authStore";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const { status } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace("/auth/login");
-  }, [isAuthenticated, router]);
+    // Only redirect once the auth check is complete
+    if (status === "unauthenticated") {
+      router.replace("/auth/login");
+    }
+  }, [status, router]);
 
-  if (!isAuthenticated) return null;
+  // Still verifying — render nothing (no redirect)
+  if (status === "initializing") return null;
 
+  // Verified: not logged in — render nothing, redirect is queued
+  if (status === "unauthenticated") return null;
+
+  // Verified: logged in
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />

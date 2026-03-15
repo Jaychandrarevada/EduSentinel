@@ -22,8 +22,19 @@ api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     if (error.response?.status === 401) {
+      // Clear credentials
       Cookies.remove("access_token");
-      window.location.href = "/auth/login";
+      localStorage.removeItem("edu_access_token");
+
+      // Update auth store state
+      const { useAuthStore } = await import("@/store/authStore");
+      useAuthStore.getState().setUnauthenticated();
+
+      // Only redirect if not already on an auth page (prevents loop)
+      if (typeof window !== "undefined" &&
+          !window.location.pathname.startsWith("/auth")) {
+        window.location.href = "/auth/login";
+      }
     }
     return Promise.reject(error);
   }

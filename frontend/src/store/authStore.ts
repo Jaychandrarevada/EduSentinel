@@ -1,38 +1,49 @@
 // ─────────────────────────────────────────────
-//  Zustand auth store
+//  Auth store — NO persist middleware
+//  Token lives in localStorage; status is derived
+//  on every page load by AuthProvider via /auth/me
 // ─────────────────────────────────────────────
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import Cookies from "js-cookie";
 import { User } from "@/types";
 
+export type AuthStatus = "initializing" | "authenticated" | "unauthenticated";
+
 interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
-  setUser: (user: User, token: string) => void;
-  logout: () => void;
+  status: AuthStatus;
+  setAuthenticated: (user: User, token: string) => void;
+  setUnauthenticated: () => void;
+  logout: () => void; // alias for setUnauthenticated, used by Sidebar
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
+const TOKEN_KEY = "edu_access_token";
 
-      setUser(user, token) {
-        Cookies.set("access_token", token, {
-          expires: 1 / 24, // 1 hour
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "strict",
-        });
-        set({ user, isAuthenticated: true });
-      },
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  status: "initializing",
 
-      logout() {
-        Cookies.remove("access_token");
-        set({ user: null, isAuthenticated: false });
-      },
-    }),
-    { name: "auth-store" }
-  )
-);
+  setAuthenticated(user, token) {
+    localStorage.setItem(TOKEN_KEY, token);
+    Cookies.set("access_token", token, {
+      expires: 1 / 24,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+    set({ user, status: "authenticated" });
+  },
+
+  setUnauthenticated() {
+    localStorage.removeItem(TOKEN_KEY);
+    Cookies.remove("access_token");
+    set({ user: null, status: "unauthenticated" });
+  },
+
+  logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    Cookies.remove("access_token");
+    set({ user: null, status: "unauthenticated" });
+  },
+}));
+
+export const TOKEN_STORAGE_KEY = TOKEN_KEY;

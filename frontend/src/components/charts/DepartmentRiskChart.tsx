@@ -35,15 +35,15 @@ export default function DepartmentRiskChart({ data }: Props) {
         />
         <Tooltip
           contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}
-          formatter={(value: number, name: string) => [value, name === "high_risk" ? "High Risk" : "Total"]}
+          formatter={(value: number, name: string) => [value, name === "high_risk_count" ? "High Risk" : "Total"]}
         />
         <Legend
-          formatter={(value) => (value === "high_risk" ? "High Risk" : "Total Students")}
+          formatter={(value) => (value === "high_risk_count" ? "High Risk" : "Total Students")}
           iconType="circle"
           iconSize={8}
         />
-        <Bar dataKey="total" fill="#e0e7ff" radius={[4, 4, 0, 0]} name="total" />
-        <Bar dataKey="high_risk" fill="#ef4444" radius={[4, 4, 0, 0]} name="high_risk" />
+        <Bar dataKey="total_students" fill="#e0e7ff" radius={[4, 4, 0, 0]} name="total_students" />
+        <Bar dataKey="high_risk_count" fill="#ef4444" radius={[4, 4, 0, 0]} name="high_risk_count" />
       </BarChart>
     </ResponsiveContainer>
   );

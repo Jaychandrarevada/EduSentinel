@@ -4,10 +4,10 @@ import { CohortSummary } from "@/types";
 
 export interface DepartmentStat {
   department: string;
-  total: number;
-  high_risk: number;
-  avg_attendance: number;
-  avg_marks: number;
+  total_students: number;
+  high_risk_count: number;
+  avg_attendance_pct: number;
+  avg_marks_pct: number;
 }
 
 export function useCohortOverview(semester?: string) {

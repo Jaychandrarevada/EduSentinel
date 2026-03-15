@@ -39,7 +39,7 @@ const DEPARTMENTS = [
 
 export default function FacultyRegisterPage() {
   const router = useRouter();
-  const { setUser } = useAuthStore();
+  const { setAuthenticated } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export default function FacultyRegisterPage() {
       });
 
       setSuccess(true);
-      setUser(me, tokens.access_token);
+      setAuthenticated(me, tokens.access_token);
       setTimeout(() => router.push("/dashboard/faculty"), 1200);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string }; status?: number } };

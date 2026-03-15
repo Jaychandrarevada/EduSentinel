@@ -35,11 +35,11 @@ const TREND_DATA: TrendDataPoint[] = [
 ];
 
 const DEPT_FALLBACK: DepartmentStat[] = [
-  { department: "CSE",  total: 320, high_risk: 42, avg_attendance: 78, avg_marks: 71 },
-  { department: "ECE",  total: 280, high_risk: 35, avg_attendance: 75, avg_marks: 68 },
-  { department: "MECH", total: 210, high_risk: 28, avg_attendance: 72, avg_marks: 65 },
-  { department: "CIVIL",total: 190, high_risk: 20, avg_attendance: 80, avg_marks: 73 },
-  { department: "IT",   total: 240, high_risk: 31, avg_attendance: 76, avg_marks: 69 },
+  { department: "CSE",  total_students: 320, high_risk_count: 42, avg_attendance_pct: 78, avg_marks_pct: 71 },
+  { department: "ECE",  total_students: 280, high_risk_count: 35, avg_attendance_pct: 75, avg_marks_pct: 68 },
+  { department: "MECH", total_students: 210, high_risk_count: 28, avg_attendance_pct: 72, avg_marks_pct: 65 },
+  { department: "CIVIL",total_students: 190, high_risk_count: 20, avg_attendance_pct: 80, avg_marks_pct: 73 },
+  { department: "IT",   total_students: 240, high_risk_count: 31, avg_attendance_pct: 76, avg_marks_pct: 69 },
 ];
 
 const FALLBACK_LIST = [

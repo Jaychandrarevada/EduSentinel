@@ -40,7 +40,7 @@ const DEMO_DATA: ModelComparisonResult = {
   data_source: "demo",
 };
 
-function pct(v: number) { return `${(v * 100).toFixed(1)}%`; }
+function pct(v: number) { return `${((v ?? 0) * 100).toFixed(1)}%`; }
 
 function MetricCell({ value, best }: { value: number; best: boolean }) {
   return (
@@ -165,7 +165,7 @@ export default function ModelEvaluationPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Best Performing Model</p>
             <p className="text-xl font-bold text-gray-900">{d.best_model}</p>
             <p className="text-sm text-gray-500">
-              Optimised for <span className="font-medium">{d.best_metric.replace("_", "-").toUpperCase()}</span>
+              Optimised for <span className="font-medium">{(d.best_metric ?? "").replace("_", "-").toUpperCase()}</span>
               {" · "}
               <span className="text-emerald-700 font-semibold">{pct(d.models.find(m => m.name === d.best_model)?.roc_auc ?? 0)}</span> ROC-AUC
             </p>

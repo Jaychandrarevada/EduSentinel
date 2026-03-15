@@ -53,7 +53,7 @@ const FEATURES = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, isAuthenticated, user } = useAuthStore();
+  const { setAuthenticated, status, user } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [activeFeature, setActiveFeature] = useState(0);
@@ -65,12 +65,11 @@ export default function LoginPage() {
     return () => document.body.classList.remove("dark-page");
   }, []);
 
-  // Redirect if already authenticated
+  // Redirect only when auth check is complete and user is confirmed authenticated
   useEffect(() => {
-    if (isAuthenticated && user) {
-      router.push(user.role === "ADMIN" ? "/dashboard/admin" : "/dashboard/faculty");
-    }
-  }, [isAuthenticated, user, router]);
+    if (status !== "authenticated" || !user) return;
+    router.replace(user.role === "ADMIN" ? "/dashboard/admin" : "/dashboard/faculty");
+  }, [status, user, router]);
 
   // Cycle feature highlight every 3s
   useEffect(() => {
@@ -100,7 +99,7 @@ export default function LoginPage() {
       });
 
       setLoginSuccess(true);
-      setUser(me, tokens.access_token);
+      setAuthenticated(me, tokens.access_token);
 
       setTimeout(() => {
         router.push(me.role === "ADMIN" ? "/dashboard/admin" : "/dashboard/faculty");

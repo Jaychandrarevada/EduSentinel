@@ -3,15 +3,17 @@ Faculty service — admin management of faculty accounts + faculty self-service 
 
 Responsibilities
 ────────────────
-  list_faculty()            List all faculty users (paginated, optional search)
-  get_faculty_or_404()      Fetch one faculty user or raise 404
-  update_faculty()          Admin updates faculty profile / department
-  set_faculty_active()      Admin activates or deactivates a faculty account
-  get_faculty_courses()     Courses assigned to a faculty member
-  get_faculty_student_ids() Student IDs in a faculty member's courses (scoping)
-  get_faculty_students()    Full student rows for a faculty member (paginated)
-  get_faculty_alerts()      Active at-risk alerts for a faculty member's students
-  get_faculty_stats()       Summary counts for a faculty profile card
+  list_faculty()              List all faculty users (paginated, optional search)
+  get_faculty_or_404()        Fetch one faculty user or raise 404
+  update_faculty()            Admin updates faculty profile / department
+  set_faculty_active()        Admin activates or deactivates a faculty account
+  get_faculty_courses()       Courses assigned to a faculty member
+  get_faculty_student_ids()   Student IDs in a faculty member's courses (scoping)
+  get_faculty_students()      Full student rows for a faculty member (paginated)
+  get_faculty_students_summary() Students with per-student metrics (attendance, marks, risk)
+  get_faculty_alerts()        Active at-risk alerts for a faculty member's students
+  get_faculty_stats()         Summary counts for a faculty profile card
+  get_faculty_dashboard()     Full dashboard: KPIs + risk dist + subject performance
 """
 from __future__ import annotations
 
@@ -282,3 +284,229 @@ async def get_faculty_stats(db: AsyncSession, faculty_id: int) -> dict:
         "student_count": student_count,
         "unresolved_alert_count": alert_count,
     }
+
+
+# ── Faculty dashboard ─────────────────────────────────────────────────────────
+
+async def get_faculty_dashboard(db: AsyncSession, faculty_id: int) -> dict:
+    """
+    Return KPI stats, risk distribution, and per-subject performance
+    for the faculty dashboard summary cards and charts.
+    """
+    from sqlalchemy import case as sa_case
+    from app.models.attendance import Attendance, AttendanceStatus
+    from app.models.academic_record import AcademicRecord
+    from app.models.assignment import Assignment
+    from app.models.prediction import Prediction, RiskLabel
+
+    student_ids = await get_faculty_student_ids(db, faculty_id)
+    courses = await get_faculty_courses(db, faculty_id)
+
+    empty = {
+        "stats": {
+            "total_students": 0,
+            "at_risk_count": 0,
+            "avg_attendance_pct": 0.0,
+            "avg_assignment_score": 0.0,
+        },
+        "risk_distribution": {"HIGH": 0, "MEDIUM": 0, "LOW": 0},
+        "subject_performance": [],
+    }
+    if not student_ids:
+        return empty
+
+    # Risk distribution
+    risk_rows = (await db.execute(
+        select(Prediction.risk_label, func.count().label("cnt"))
+        .where(Prediction.student_id.in_(student_ids))
+        .group_by(Prediction.risk_label)
+    )).all()
+    risk_counts: dict = {r.risk_label: r.cnt for r in risk_rows}
+    at_risk_count = (
+        risk_counts.get(RiskLabel.HIGH, 0) + risk_counts.get(RiskLabel.MEDIUM, 0)
+    )
+
+    # Average attendance across all courses
+    avg_att = (await db.execute(
+        select(
+            func.avg(sa_case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)) * 100
+        ).where(Attendance.student_id.in_(student_ids))
+    )).scalar_one() or 0.0
+
+    # Average assignment score (submitted only)
+    avg_assign = (await db.execute(
+        select(func.avg(Assignment.score / Assignment.max_score * 100))
+        .where(
+            Assignment.student_id.in_(student_ids),
+            Assignment.is_submitted == True,   # noqa: E712
+            Assignment.max_score > 0,
+        )
+    )).scalar_one() or 0.0
+
+    # Per-subject performance
+    subject_perf = []
+    for course in courses:
+        c_att = (await db.execute(
+            select(
+                func.avg(sa_case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)) * 100
+            ).where(
+                Attendance.student_id.in_(student_ids),
+                Attendance.course_id == course.id,
+            )
+        )).scalar_one() or 0.0
+
+        c_marks = (await db.execute(
+            select(func.avg(AcademicRecord.score / AcademicRecord.max_score * 100))
+            .where(
+                AcademicRecord.student_id.in_(student_ids),
+                AcademicRecord.course_id == course.id,
+                AcademicRecord.max_score > 0,
+            )
+        )).scalar_one() or 0.0
+
+        c_students = (await db.execute(
+            select(func.count(Enrollment.student_id.distinct()))
+            .where(Enrollment.course_id == course.id)
+        )).scalar_one()
+
+        subject_perf.append({
+            "course_id": course.id,
+            "course_name": course.name,
+            "student_count": c_students,
+            "avg_attendance_pct": round(float(c_att), 1),
+            "avg_marks_pct": round(float(c_marks), 1),
+        })
+
+    return {
+        "stats": {
+            "total_students": len(student_ids),
+            "at_risk_count": at_risk_count,
+            "avg_attendance_pct": round(float(avg_att), 1),
+            "avg_assignment_score": round(float(avg_assign), 1),
+        },
+        "risk_distribution": {
+            "HIGH": risk_counts.get(RiskLabel.HIGH, 0),
+            "MEDIUM": risk_counts.get(RiskLabel.MEDIUM, 0),
+            "LOW": risk_counts.get(RiskLabel.LOW, 0),
+        },
+        "subject_performance": subject_perf,
+    }
+
+
+async def get_faculty_students_summary(
+    db: AsyncSession,
+    faculty_id: int,
+    search: Optional[str] = None,
+    risk_label: Optional[str] = None,
+    page: int = 1,
+    size: int = 50,
+) -> tuple[list[dict], int]:
+    """
+    Return paginated students with per-student metrics:
+    attendance %, marks %, assignment %, latest risk label + score.
+    Used by the faculty All Students table.
+    """
+    from sqlalchemy import case as sa_case, or_
+    from app.models.attendance import Attendance, AttendanceStatus
+    from app.models.academic_record import AcademicRecord
+    from app.models.assignment import Assignment
+    from app.models.prediction import Prediction
+
+    # Base: students in faculty's courses
+    base_q = (
+        select(Student)
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .join(Course, Course.id == Enrollment.course_id)
+        .where(Course.faculty_id == faculty_id)
+        .distinct()
+    )
+    if search:
+        pattern = f"%{search.lower()}%"
+        base_q = base_q.where(
+            or_(
+                func.lower(Student.full_name).like(pattern),
+                func.lower(Student.roll_no).like(pattern),
+            )
+        )
+
+    total = (await db.execute(select(func.count()).select_from(base_q.subquery()))).scalar_one()
+    students = (await db.execute(
+        base_q.order_by(Student.full_name).offset((page - 1) * size).limit(size)
+    )).scalars().all()
+
+    if not students:
+        return [], total
+
+    sids = [s.id for s in students]
+
+    # Attendance per student
+    att_rows = (await db.execute(
+        select(
+            Attendance.student_id,
+            (func.avg(sa_case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)) * 100).label("att_pct"),
+        )
+        .where(Attendance.student_id.in_(sids))
+        .group_by(Attendance.student_id)
+    )).all()
+    att_map = {r.student_id: round(float(r.att_pct), 1) for r in att_rows}
+
+    # Marks per student
+    marks_rows = (await db.execute(
+        select(
+            AcademicRecord.student_id,
+            (func.avg(AcademicRecord.score / AcademicRecord.max_score * 100)).label("marks_pct"),
+        )
+        .where(AcademicRecord.student_id.in_(sids), AcademicRecord.max_score > 0)
+        .group_by(AcademicRecord.student_id)
+    )).all()
+    marks_map = {r.student_id: round(float(r.marks_pct), 1) for r in marks_rows}
+
+    # Assignment score per student
+    assign_rows = (await db.execute(
+        select(
+            Assignment.student_id,
+            (func.avg(Assignment.score / Assignment.max_score * 100)).label("assign_pct"),
+        )
+        .where(
+            Assignment.student_id.in_(sids),
+            Assignment.is_submitted == True,   # noqa: E712
+            Assignment.max_score > 0,
+        )
+        .group_by(Assignment.student_id)
+    )).all()
+    assign_map = {r.student_id: round(float(r.assign_pct), 1) for r in assign_rows}
+
+    # Latest prediction per student (most recent predicted_at)
+    pred_rows = (await db.execute(
+        select(Prediction)
+        .where(Prediction.student_id.in_(sids))
+        .order_by(Prediction.student_id, Prediction.predicted_at.desc())
+        .distinct(Prediction.student_id)
+    )).scalars().all()
+    pred_map = {
+        p.student_id: {
+            "risk_label": p.risk_label.value if hasattr(p.risk_label, "value") else str(p.risk_label),
+            "risk_score": round(p.risk_score, 3),
+        }
+        for p in pred_rows
+    }
+
+    result = []
+    for s in students:
+        pred = pred_map.get(s.id, {})
+        if risk_label and pred.get("risk_label") != risk_label:
+            continue
+        result.append({
+            "id": s.id,
+            "roll_no": s.roll_no,
+            "full_name": s.full_name,
+            "department": s.department,
+            "semester": s.semester,
+            "attendance_pct": att_map.get(s.id, 0.0),
+            "marks_pct": marks_map.get(s.id, 0.0),
+            "assignment_pct": assign_map.get(s.id, 0.0),
+            "risk_label": pred.get("risk_label"),
+            "risk_score": pred.get("risk_score"),
+        })
+
+    return result, total

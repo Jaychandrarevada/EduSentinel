@@ -39,7 +39,7 @@ interface TrainResult {
 const SEMESTERS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6"];
 
 function MetricBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
+  const pct = Math.round((value ?? 0) * 100);
   const color = pct >= 80 ? "bg-emerald-500" : pct >= 65 ? "bg-amber-400" : "bg-red-400";
   return (
     <div className="space-y-1">
@@ -64,21 +64,46 @@ export default function AdminMLConfigPage() {
   const [showAllMetrics, setShowAllMetrics] = useState(false);
   const [runSemester, setRunSemester] = useState("Sem 5");
 
+  const DEMO_META: ModelMeta = {
+    version: "v20240310_140000",
+    model_name: "gradient_boosting",
+    threshold: 0.52,
+    trained_at: "2024-03-10T14:00:00Z",
+    metrics: { roc_auc: 0.91, recall: 0.87, precision: 0.83, f1: 0.85, accuracy: 0.88, passes_gates: true },
+    feature_cols: ["attendance_pct", "avg_ia_score", "assignment_avg_score", "lms_login_frequency", "lms_time_spent_hours", "previous_gpa"],
+  };
+
   const fetchModel = async () => {
     setLoading(true);
     try {
-      const r = await api.get("/ml/model");
-      setModelMeta(r.data);
+      const r = await api.get("/ml/model-comparison");
+      const res = r.data;
+      // API returns ModelComparisonResult — extract the best model's data
+      if (res?.models && Array.isArray(res.models)) {
+        const best = res.models.find((m: { name: string }) => m.name === res.best_model) ?? res.models[0];
+        if (!best) { setModelMeta(DEMO_META); return; }
+        const dateStr: string = res.comparison_date ?? new Date().toISOString();
+        setModelMeta({
+          version: `v${dateStr.slice(0, 10).replace(/-/g, "")}`,
+          model_name: (res.best_model ?? best.name ?? "unknown").toLowerCase().replace(/ /g, "_"),
+          threshold: 0.50,
+          trained_at: dateStr,
+          metrics: {
+            roc_auc:      best.roc_auc      ?? 0,
+            recall:       best.recall       ?? 0,
+            precision:    best.precision    ?? 0,
+            f1:           best.f1           ?? 0,
+            accuracy:     best.accuracy     ?? 0,
+            passes_gates: (best.roc_auc ?? 0) >= 0.70 && (best.recall ?? 0) >= 0.60,
+          },
+          feature_cols: [],
+        });
+      } else {
+        // Response already matches ModelMeta shape
+        setModelMeta(res);
+      }
     } catch {
-      // fallback demo data
-      setModelMeta({
-        version: "v20240310_140000",
-        model_name: "gradient_boosting",
-        threshold: 0.52,
-        trained_at: "2024-03-10T14:00:00Z",
-        metrics: { roc_auc: 0.91, recall: 0.87, precision: 0.83, f1: 0.85, accuracy: 0.88, passes_gates: true },
-        feature_cols: ["attendance_pct", "avg_ia_score", "assignment_avg_score", "lms_login_frequency", "lms_time_spent_hours", "previous_gpa"],
-      });
+      setModelMeta(DEMO_META);
     } finally {
       setLoading(false);
     }
@@ -91,7 +116,7 @@ export default function AdminMLConfigPage() {
     setTrainError(null);
     setTrainResult(null);
     try {
-      const r = await api.post("/train", { source: "synthetic", n_samples: 2000 });
+      const r = await api.post("/ml/train-all", { source: "synthetic", n_samples: 2000 });
       setTrainResult(r.data);
       fetchModel();
     } catch (err: unknown) {
@@ -145,7 +170,7 @@ export default function AdminMLConfigPage() {
                 <div className="rounded-lg bg-gray-50 p-3">
                   <p className="text-xs text-gray-500">Algorithm</p>
                   <p className="mt-0.5 font-semibold capitalize text-gray-900">
-                    {modelMeta.model_name.replace(/_/g, " ")}
+                    {(modelMeta.model_name ?? "").replace(/_/g, " ")}
                   </p>
                 </div>
                 <div className="rounded-lg bg-gray-50 p-3">
@@ -154,7 +179,7 @@ export default function AdminMLConfigPage() {
                 </div>
                 <div className="rounded-lg bg-gray-50 p-3">
                   <p className="text-xs text-gray-500">Decision Threshold</p>
-                  <p className="mt-0.5 font-semibold text-gray-900">{modelMeta.threshold.toFixed(2)}</p>
+                  <p className="mt-0.5 font-semibold text-gray-900">{(modelMeta.threshold ?? 0).toFixed(2)}</p>
                 </div>
                 <div className="rounded-lg bg-gray-50 p-3">
                   <p className="text-xs text-gray-500">Trained At</p>
@@ -165,33 +190,33 @@ export default function AdminMLConfigPage() {
               {/* Quality gate */}
               <div className={cn(
                 "flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium",
-                modelMeta.metrics.passes_gates
+                modelMeta.metrics?.passes_gates
                   ? "bg-emerald-50 text-emerald-700"
                   : "bg-amber-50 text-amber-700"
               )}>
-                {modelMeta.metrics.passes_gates
+                {modelMeta.metrics?.passes_gates
                   ? <CheckCircle className="h-4 w-4" />
                   : <AlertCircle className="h-4 w-4" />}
-                {modelMeta.metrics.passes_gates ? "Passes all quality gates" : "Quality gates not met — consider retraining"}
+                {modelMeta.metrics?.passes_gates ? "Passes all quality gates" : "Quality gates not met — consider retraining"}
               </div>
 
               {/* Metrics */}
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Model Metrics</p>
-                <MetricBar label="ROC-AUC" value={modelMeta.metrics.roc_auc} />
-                <MetricBar label="Recall" value={modelMeta.metrics.recall} />
-                <MetricBar label="Precision" value={modelMeta.metrics.precision} />
-                <MetricBar label="F1 Score" value={modelMeta.metrics.f1} />
-                <MetricBar label="Accuracy" value={modelMeta.metrics.accuracy} />
+                <MetricBar label="ROC-AUC" value={modelMeta.metrics?.roc_auc ?? 0} />
+                <MetricBar label="Recall" value={modelMeta.metrics?.recall ?? 0} />
+                <MetricBar label="Precision" value={modelMeta.metrics?.precision ?? 0} />
+                <MetricBar label="F1 Score" value={modelMeta.metrics?.f1 ?? 0} />
+                <MetricBar label="Accuracy" value={modelMeta.metrics?.accuracy ?? 0} />
               </div>
 
               {/* Features */}
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Features ({modelMeta.feature_cols.length})
+                  Features ({modelMeta.feature_cols?.length ?? 0})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {modelMeta.feature_cols.map((f) => (
+                  {(modelMeta.feature_cols ?? []).map((f) => (
                     <span key={f} className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
                       {f}
                     </span>
@@ -225,12 +250,12 @@ export default function AdminMLConfigPage() {
               )}>
                 <div className="flex items-center gap-2 font-semibold">
                   {trainResult.passes_gates ? <CheckCircle className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-amber-500" />}
-                  Training complete — Best: <span className="capitalize">{trainResult.best_model.replace(/_/g, " ")}</span>
+                  Training complete — Best: <span className="capitalize">{(trainResult.best_model ?? "").replace(/_/g, " ")}</span>
                 </div>
                 <p className="mt-1 text-xs text-gray-600">
                   Version: <code className="font-mono">{trainResult.version}</code> &nbsp;·&nbsp;
-                  ROC-AUC: {(trainResult.metrics.roc_auc * 100).toFixed(1)}% &nbsp;·&nbsp;
-                  Recall: {(trainResult.metrics.recall * 100).toFixed(1)}%
+                  ROC-AUC: {((trainResult.metrics?.roc_auc ?? 0) * 100).toFixed(1)}% &nbsp;·&nbsp;
+                  Recall: {((trainResult.metrics?.recall ?? 0) * 100).toFixed(1)}%
                 </p>
 
                 {trainResult.all_metrics && (
@@ -257,10 +282,10 @@ export default function AdminMLConfigPage() {
                       <tbody className="divide-y divide-gray-100">
                         {trainResult.all_metrics.map((m) => (
                           <tr key={m.model_name} className={m.model_name === trainResult.best_model ? "bg-indigo-50" : ""}>
-                            <td className="px-3 py-2 capitalize font-medium">{m.model_name.replace(/_/g, " ")}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{(m.roc_auc * 100).toFixed(1)}%</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{(m.recall * 100).toFixed(1)}%</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{(m.f1 * 100).toFixed(1)}%</td>
+                            <td className="px-3 py-2 capitalize font-medium">{(m.model_name ?? "").replace(/_/g, " ")}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{((m.roc_auc ?? 0) * 100).toFixed(1)}%</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{((m.recall ?? 0) * 100).toFixed(1)}%</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{((m.f1 ?? 0) * 100).toFixed(1)}%</td>
                           </tr>
                         ))}
                       </tbody>

@@ -78,11 +78,11 @@ export default function AdminAnalyticsPage() {
 
   // Department table data
   const departments = deptStats && deptStats.length > 0 ? deptStats : [
-    { department: "CSE",   total: 320, high_risk: 42, avg_attendance: 78, avg_marks: 71 },
-    { department: "ECE",   total: 280, high_risk: 35, avg_attendance: 75, avg_marks: 68 },
-    { department: "MECH",  total: 210, high_risk: 28, avg_attendance: 72, avg_marks: 65 },
-    { department: "CIVIL", total: 190, high_risk: 20, avg_attendance: 80, avg_marks: 73 },
-    { department: "IT",    total: 240, high_risk: 31, avg_attendance: 76, avg_marks: 69 },
+    { department: "CSE",   total_students: 320, high_risk_count: 42, avg_attendance_pct: 78, avg_marks_pct: 71 },
+    { department: "ECE",   total_students: 280, high_risk_count: 35, avg_attendance_pct: 75, avg_marks_pct: 68 },
+    { department: "MECH",  total_students: 210, high_risk_count: 28, avg_attendance_pct: 72, avg_marks_pct: 65 },
+    { department: "CIVIL", total_students: 190, high_risk_count: 20, avg_attendance_pct: 80, avg_marks_pct: 73 },
+    { department: "IT",    total_students: 240, high_risk_count: 31, avg_attendance_pct: 76, avg_marks_pct: 69 },
   ];
 
   return (
@@ -153,19 +153,19 @@ export default function AdminAnalyticsPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {departments.map((d) => {
-                const riskPct = d.total > 0 ? (d.high_risk / d.total) * 100 : 0;
+                const riskPct = (d.total_students ?? 0) > 0 ? ((d.high_risk_count ?? 0) / d.total_students) * 100 : 0;
                 return (
                   <tr key={d.department} className="hover:bg-gray-50/60">
                     <td className="px-6 py-3 font-medium text-gray-900">{d.department}</td>
-                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{d.total.toLocaleString()}</td>
-                    <td className="px-6 py-3 text-right tabular-nums text-red-600 font-medium">{d.high_risk}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{(d.total_students ?? 0).toLocaleString()}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-red-600 font-medium">{d.high_risk_count ?? 0}</td>
                     <td className="px-6 py-3 text-right tabular-nums">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${riskPct >= 20 ? "bg-red-50 text-red-700" : riskPct >= 10 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
                         {formatPct(riskPct)}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{formatPct(d.avg_attendance)}</td>
-                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{formatPct(d.avg_marks)}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{formatPct(d.avg_attendance_pct ?? 0)}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-gray-600">{formatPct(d.avg_marks_pct ?? 0)}</td>
                   </tr>
                 );
               })}
