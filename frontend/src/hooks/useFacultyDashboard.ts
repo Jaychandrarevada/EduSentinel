@@ -4,7 +4,9 @@ import api from "@/lib/api";
 export interface SubjectPerformance {
   course_id: number;
   course_name: string;
+  course_code: string;
   student_count: number;
+  at_risk_count: number;
   avg_attendance_pct: number;
   avg_marks_pct: number;
 }
@@ -60,6 +62,7 @@ export function useFacultyDashboard() {
 export function useStudentsSummary(filters: {
   search?: string;
   risk_label?: string;
+  course_id?: number;
   page?: number;
   size?: number;
 } = {}) {

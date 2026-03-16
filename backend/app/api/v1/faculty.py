@@ -127,6 +127,7 @@ async def my_dashboard(
 async def my_students_summary(
     search: Optional[str] = Query(None, max_length=100),
     risk_label: Optional[str] = Query(None),
+    course_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -134,14 +135,15 @@ async def my_students_summary(
 ):
     """
     Students with enriched per-student metrics: attendance %, marks %,
-    assignment score, and latest risk label. Used for the faculty All Students table.
+    assignment score, and latest risk label.
+    Optionally filtered by course_id for subject-specific view.
     """
-    from app.schemas.common import PaginatedResponse as PR
     items, total = await faculty_service.get_faculty_students_summary(
         db,
         faculty_id=current_user.id,
         search=search,
         risk_label=risk_label,
+        course_id=course_id,
         page=page,
         size=size,
     )

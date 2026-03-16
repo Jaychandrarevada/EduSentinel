@@ -364,15 +364,31 @@ async def get_faculty_dashboard(db: AsyncSession, faculty_id: int) -> dict:
             )
         )).scalar_one() or 0.0
 
-        c_students = (await db.execute(
-            select(func.count(Enrollment.student_id.distinct()))
+        # Students enrolled in this specific course
+        c_student_ids = (await db.execute(
+            select(Enrollment.student_id)
             .where(Enrollment.course_id == course.id)
-        )).scalar_one()
+        )).scalars().all()
+
+        c_students = len(c_student_ids)
+
+        # At-risk count (HIGH or MEDIUM) for students in this course
+        c_at_risk = 0
+        if c_student_ids:
+            c_at_risk = (await db.execute(
+                select(func.count(Prediction.student_id.distinct()))
+                .where(
+                    Prediction.student_id.in_(c_student_ids),
+                    Prediction.risk_label.in_([RiskLabel.HIGH, RiskLabel.MEDIUM]),
+                )
+            )).scalar_one() or 0
 
         subject_perf.append({
             "course_id": course.id,
             "course_name": course.name,
+            "course_code": course.code,
             "student_count": c_students,
+            "at_risk_count": int(c_at_risk),
             "avg_attendance_pct": round(float(c_att), 1),
             "avg_marks_pct": round(float(c_marks), 1),
         })
@@ -398,12 +414,14 @@ async def get_faculty_students_summary(
     faculty_id: int,
     search: Optional[str] = None,
     risk_label: Optional[str] = None,
+    course_id: Optional[int] = None,
     page: int = 1,
     size: int = 50,
 ) -> tuple[list[dict], int]:
     """
     Return paginated students with per-student metrics:
     attendance %, marks %, assignment %, latest risk label + score.
+    Optionally filter by a specific course_id.
     Used by the faculty All Students table.
     """
     from sqlalchemy import case as sa_case, or_
@@ -412,7 +430,7 @@ async def get_faculty_students_summary(
     from app.models.assignment import Assignment
     from app.models.prediction import Prediction
 
-    # Base: students in faculty's courses
+    # Base: students in faculty's courses (optionally filtered by course)
     base_q = (
         select(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)
@@ -420,6 +438,8 @@ async def get_faculty_students_summary(
         .where(Course.faculty_id == faculty_id)
         .distinct()
     )
+    if course_id is not None:
+        base_q = base_q.where(Course.id == course_id)
     if search:
         pattern = f"%{search.lower()}%"
         base_q = base_q.where(

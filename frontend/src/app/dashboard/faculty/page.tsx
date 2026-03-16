@@ -1,13 +1,14 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Faculty Dashboard — Overview · At Risk · All Students
+//  Faculty Dashboard — Overview · Courses · At Risk · All Students
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Users, AlertTriangle, BarChart2, ChevronRight,
-  BookOpen, Activity, Search, Mail, CheckCircle,
+  BookOpen, Activity, Search, Mail, CheckCircle, X,
+  GraduationCap,
 } from "lucide-react";
 import api from "@/lib/api";
 import {
@@ -17,13 +18,16 @@ import {
 import RiskBadge from "@/components/dashboard/RiskBadge";
 import { PageLoading } from "@/components/ui/LoadingSpinner";
 import EmptyState from "@/components/ui/EmptyState";
-import { useFacultyDashboard, useStudentsSummary } from "@/hooks/useFacultyDashboard";
+import {
+  useFacultyDashboard, useStudentsSummary,
+  type SubjectPerformance,
+} from "@/hooks/useFacultyDashboard";
 import { usePredictions } from "@/hooks/usePredictions";
 import { formatDate } from "@/lib/utils";
 import type { RiskLabel } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Tab = "overview" | "at-risk" | "all";
+type Tab = "overview" | "courses" | "at-risk" | "all";
 type RiskFilter = "ALL" | RiskLabel;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -79,6 +83,91 @@ function KpiCard({
   );
 }
 
+// ── Course Card ───────────────────────────────────────────────────────────────
+function CourseCard({
+  course,
+  onClick,
+}: {
+  course: SubjectPerformance;
+  onClick: () => void;
+}) {
+  const riskPct = course.student_count > 0
+    ? Math.round((course.at_risk_count / course.student_count) * 100)
+    : 0;
+  const riskColor =
+    riskPct >= 40 ? "text-red-600 bg-red-50 ring-red-200" :
+    riskPct >= 20 ? "text-amber-600 bg-amber-50 ring-amber-200" :
+    "text-emerald-600 bg-emerald-50 ring-emerald-200";
+
+  return (
+    <button
+      onClick={onClick}
+      className="card group flex flex-col gap-4 p-5 text-left hover:shadow-md hover:ring-2 hover:ring-indigo-200 transition-all"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-mono text-gray-400">{course.course_code}</p>
+          <h3 className="mt-0.5 font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
+            {course.course_name}
+          </h3>
+        </div>
+        <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${riskColor}`}>
+          {course.at_risk_count} at risk
+        </span>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-lg font-bold text-gray-900">{course.student_count}</p>
+          <p className="text-xs text-gray-400">Students</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-gray-900">{course.avg_attendance_pct.toFixed(0)}%</p>
+          <p className="text-xs text-gray-400">Attendance</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-gray-900">{course.avg_marks_pct.toFixed(0)}%</p>
+          <p className="text-xs text-gray-400">Avg Marks</p>
+        </div>
+      </div>
+
+      {/* Progress bars */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>Attendance</span>
+          <span className={course.avg_attendance_pct < 75 ? "text-red-500 font-medium" : "text-emerald-600 font-medium"}>
+            {course.avg_attendance_pct.toFixed(1)}%
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+          <div
+            className={`h-full rounded-full ${course.avg_attendance_pct < 75 ? "bg-red-400" : "bg-indigo-400"}`}
+            style={{ width: `${Math.min(100, course.avg_attendance_pct)}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>Marks</span>
+          <span className={course.avg_marks_pct < 50 ? "text-red-500 font-medium" : "text-emerald-600 font-medium"}>
+            {course.avg_marks_pct.toFixed(1)}%
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+          <div
+            className={`h-full rounded-full ${course.avg_marks_pct < 50 ? "bg-red-400" : "bg-emerald-400"}`}
+            style={{ width: `${Math.min(100, course.avg_marks_pct)}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 text-xs font-medium text-indigo-600 group-hover:gap-2 transition-all">
+        View students <ChevronRight className="h-3.5 w-3.5" />
+      </div>
+    </button>
+  );
+}
+
 // ── Pie colours ───────────────────────────────────────────────────────────────
 const PIE_COLORS: Record<string, string> = {
   HIGH: "#ef4444", MEDIUM: "#f59e0b", LOW: "#22c55e",
@@ -90,6 +179,7 @@ export default function FacultyDashboardPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL");
   const [search, setSearch] = useState("");
   const [allPage, setAllPage] = useState(1);
+  const [selectedCourse, setSelectedCourse] = useState<SubjectPerformance | null>(null);
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState<{ sent: number; attempted: number } | null>(null);
 
@@ -102,11 +192,12 @@ export default function FacultyDashboardPage() {
     size: 100,
   });
 
-  // All students tab (with metrics)
+  // All students tab (with metrics) — filtered by selected course when in Courses view
   const { data: allStudents, loading: allLoading } = useStudentsSummary({
     search: search.trim() || undefined,
     page: allPage,
     size: 50,
+    course_id: selectedCourse?.course_id,
   });
 
   // Pie data
@@ -114,15 +205,13 @@ export default function FacultyDashboardPage() {
     if (!dash) return [];
     const d = dash.risk_distribution;
     return [
-      { name: "High", value: d.HIGH,   key: "HIGH"   },
+      { name: "High",   value: d.HIGH,   key: "HIGH"   },
       { name: "Medium", value: d.MEDIUM, key: "MEDIUM" },
-      { name: "Low",  value: d.LOW,    key: "LOW"    },
+      { name: "Low",    value: d.LOW,    key: "LOW"    },
     ].filter((x) => x.value > 0);
   }, [dash]);
 
-  // Subject bar data
   const subjectData = dash?.subject_performance ?? [];
-
   const riskFilters: RiskFilter[] = ["ALL", "HIGH", "MEDIUM", "LOW"];
 
   async function sendRiskEmails() {
@@ -139,11 +228,24 @@ export default function FacultyDashboardPage() {
     }
   }
 
+  function selectCourse(course: SubjectPerformance) {
+    setSelectedCourse(course);
+    setSearch("");
+    setAllPage(1);
+    setTab("all");
+  }
+
+  function clearCourseFilter() {
+    setSelectedCourse(null);
+    setSearch("");
+    setAllPage(1);
+  }
+
   // ── Tab button helper ──
   function TabBtn({ id, label, count }: { id: Tab; label: string; count?: number }) {
     return (
       <button
-        onClick={() => setTab(id)}
+        onClick={() => { setTab(id); if (id !== "all") clearCourseFilter(); }}
         className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
           tab === id ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
         }`}
@@ -168,11 +270,10 @@ export default function FacultyDashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Faculty Dashboard</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Monitor your students' performance, attendance, and risk levels.
+            Monitor your students&apos; performance, attendance, and risk levels.
           </p>
         </div>
-        {/* Quick search (all tab) */}
-        {tab !== "overview" && (
+        {tab !== "overview" && tab !== "courses" && (
           <div className="relative w-full max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -222,9 +323,10 @@ export default function FacultyDashboardPage() {
 
       {/* Tab bar */}
       <div className="flex rounded-xl bg-gray-100 p-1 w-fit">
-        <TabBtn id="overview"  label="Overview" />
-        <TabBtn id="at-risk"   label="At Risk"      count={atRiskData?.total} />
-        <TabBtn id="all"       label="All Students" count={allStudents?.total} />
+        <TabBtn id="overview" label="Overview" />
+        <TabBtn id="courses"  label="My Courses" count={subjectData.length} />
+        <TabBtn id="at-risk"  label="At Risk"    count={atRiskData?.total} />
+        <TabBtn id="all"      label="All Students" count={allStudents?.total} />
       </div>
 
       {/* ── OVERVIEW TAB ─────────────────────────────────────────────────── */}
@@ -232,9 +334,7 @@ export default function FacultyDashboardPage() {
         <div className="space-y-6">
           {dashLoading ? <PageLoading /> : (
             <>
-              {/* Charts row */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
                 {/* Risk distribution pie */}
                 <div className="card p-6">
                   <h2 className="mb-4 text-base font-semibold text-gray-800">Risk Distribution</h2>
@@ -295,41 +395,6 @@ export default function FacultyDashboardPage() {
                 </div>
               </div>
 
-              {/* Subject details table */}
-              {subjectData.length > 0 && (
-                <div className="card overflow-hidden">
-                  <div className="border-b border-gray-100 px-6 py-4">
-                    <h2 className="text-base font-semibold text-gray-800">Subject Summary</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                      <thead>
-                        <tr className="table-header">
-                          <th className="px-6 py-3 text-left">Subject</th>
-                          <th className="px-6 py-3 text-right">Students</th>
-                          <th className="px-6 py-3 text-right">Avg Attendance</th>
-                          <th className="px-6 py-3 text-right">Avg Marks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {subjectData.map((s) => (
-                          <tr key={s.course_id} className="hover:bg-gray-50/60">
-                            <td className="px-6 py-3 font-medium text-gray-900">{s.course_name}</td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{s.student_count}</td>
-                            <td className="px-6 py-3 text-right">
-                              <PctBar value={s.avg_attendance_pct} color={s.avg_attendance_pct < 75 ? "bg-red-400" : "bg-indigo-400"} />
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              <PctBar value={s.avg_marks_pct} color={s.avg_marks_pct < 50 ? "bg-red-400" : "bg-emerald-400"} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               {/* Top at-risk students preview */}
               {(atRiskData?.items.length ?? 0) > 0 && (
                 <div className="card overflow-hidden">
@@ -385,6 +450,86 @@ export default function FacultyDashboardPage() {
         </div>
       )}
 
+      {/* ── COURSES TAB ──────────────────────────────────────────────────── */}
+      {tab === "courses" && (
+        <div className="space-y-6">
+          {dashLoading ? (
+            <PageLoading />
+          ) : subjectData.length === 0 ? (
+            <EmptyState
+              icon={BookOpen}
+              title="No courses assigned"
+              description="You have no courses assigned yet. Contact your administrator."
+            />
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">
+                Click any course to view its students and risk predictions.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {subjectData.map((course) => (
+                  <CourseCard
+                    key={course.course_id}
+                    course={course}
+                    onClick={() => selectCourse(course)}
+                  />
+                ))}
+              </div>
+
+              {/* Summary row */}
+              <div className="card p-5">
+                <h2 className="mb-4 text-sm font-semibold text-gray-700">All Subjects Summary</h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-sm">
+                    <thead>
+                      <tr className="table-header">
+                        <th className="px-4 py-3 text-left">Subject</th>
+                        <th className="px-4 py-3 text-left">Code</th>
+                        <th className="px-4 py-3 text-right">Students</th>
+                        <th className="px-4 py-3 text-right">At Risk</th>
+                        <th className="px-4 py-3 text-right">Attendance</th>
+                        <th className="px-4 py-3 text-right">Avg Marks</th>
+                        <th className="px-4 py-3 text-left"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {subjectData.map((s) => (
+                        <tr key={s.course_id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{s.course_name}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-400">{s.course_code}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{s.student_count}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              s.at_risk_count > 0 ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                            }`}>
+                              {s.at_risk_count}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <PctBar value={s.avg_attendance_pct} color={s.avg_attendance_pct < 75 ? "bg-red-400" : "bg-indigo-400"} />
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <PctBar value={s.avg_marks_pct} color={s.avg_marks_pct < 50 ? "bg-red-400" : "bg-emerald-400"} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => selectCourse(s)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                            >
+                              Students <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── AT-RISK TAB ──────────────────────────────────────────────────── */}
       {tab === "at-risk" && (
         <>
@@ -410,7 +555,6 @@ export default function FacultyDashboardPage() {
               ))}
             </div>
 
-            {/* Send email alerts button */}
             <div className="flex items-center gap-3">
               {emailResult && (
                 <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
@@ -486,11 +630,40 @@ export default function FacultyDashboardPage() {
       {/* ── ALL STUDENTS TAB ─────────────────────────────────────────────── */}
       {tab === "all" && (
         <>
+          {/* Course filter badge */}
+          {selectedCourse && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 ring-1 ring-indigo-200">
+                <GraduationCap className="h-4 w-4 text-indigo-600" />
+                <span className="text-sm font-medium text-indigo-800">
+                  {selectedCourse.course_name}
+                  {selectedCourse.course_code && (
+                    <span className="ml-1.5 text-xs font-mono text-indigo-400">{selectedCourse.course_code}</span>
+                  )}
+                </span>
+                <button
+                  onClick={clearCourseFilter}
+                  className="ml-1 rounded-full p-0.5 text-indigo-400 hover:bg-indigo-200 hover:text-indigo-700 transition-colors"
+                  title="Clear filter"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <span className="text-xs text-gray-400">
+                Showing students enrolled in this course
+              </span>
+            </div>
+          )}
+
           {allLoading ? (
             <PageLoading />
           ) : (allStudents?.items.length ?? 0) === 0 ? (
             <EmptyState icon={Users} title="No students found"
-              description={search ? `No results for "${search}".` : "No students are assigned to your courses yet."} />
+              description={search
+                ? `No results for "${search}".`
+                : selectedCourse
+                  ? `No students enrolled in ${selectedCourse.course_name}.`
+                  : "No students are assigned to your courses yet."} />
           ) : (
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
@@ -534,7 +707,9 @@ export default function FacultyDashboardPage() {
                           <PctBar value={s.assignment_pct} color={s.assignment_pct < 60 ? "bg-amber-400" : "bg-sky-400"} />
                         </td>
                         <td className="px-6 py-3">
-                          {s.risk_label ? <RiskBadge label={s.risk_label as RiskLabel} /> : <span className="text-xs text-gray-400">—</span>}
+                          {s.risk_label
+                            ? <RiskBadge label={s.risk_label as RiskLabel} />
+                            : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-6 py-3">
                           <Link href={`/dashboard/analytics/${s.id}`}
