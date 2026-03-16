@@ -91,7 +91,9 @@ export default function GenerateDataPage() {
     setResetError(null);
     setResetResult(null);
     try {
-      const { data } = await api.post("/students/reset", { mode: resetMode, count });
+      const params: Record<string, string | number> = { mode: resetMode };
+      if (count !== undefined) params.count = count;
+      const { data } = await api.post("/students/reset", null, { params });
       setResetResult({ deleted: data.students_deleted, message: data.message });
       setResetConfirm(false);
     } catch (err: unknown) {

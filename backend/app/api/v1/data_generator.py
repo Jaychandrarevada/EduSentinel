@@ -1,7 +1,7 @@
 """Data generator router — POST /students/generate"""
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,19 +112,6 @@ async def enroll_all_students(
 
 # ── Reset / bulk-delete generated students ────────────────────────────────────
 
-class ResetStudentsRequest(BaseModel):
-    mode: Literal["last_n", "keep_first_n", "generated_all"] = Field(
-        description=(
-            "last_n       — delete the most recently created N students\n"
-            "keep_first_n — keep the oldest N, delete everyone else\n"
-            "generated_all— delete every student whose roll_no starts with 'GEN'"
-        )
-    )
-    count: Optional[int] = Field(
-        default=None, ge=1, le=10000,
-        description="Required for last_n and keep_first_n modes.",
-    )
-
 
 class ResetStudentsResponse(BaseModel):
     students_deleted: int
@@ -149,14 +136,16 @@ async def _delete_students_by_ids(db: AsyncSession, student_ids: list[int]) -> i
 
 
 @router.post("/reset", response_model=ResetStudentsResponse, status_code=200, summary="Bulk-delete generated students")
-@router.delete("/reset", response_model=ResetStudentsResponse, status_code=200, summary="Bulk-delete generated students (DELETE alias)")
+@router.delete("/reset", response_model=ResetStudentsResponse, status_code=200, summary="Bulk-delete generated students")
 async def reset_students(
-    payload: ResetStudentsRequest,
+    mode: Literal["last_n", "keep_first_n", "generated_all"] = Query(..., description="Deletion mode"),
+    count: Optional[int] = Query(None, ge=1, le=10000, description="Required for last_n and keep_first_n"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(Role.ADMIN)),
 ):
     """
     Bulk-delete generated students and all their related data.
+    Parameters are passed as query strings: ?mode=last_n&count=300
 
     Modes
     ─────
@@ -164,22 +153,20 @@ async def reset_students(
     keep_first_n  Keep the oldest `count` students, delete the rest.
     generated_all Delete ALL students whose roll_no begins with 'GEN'.
     """
-    if payload.mode in ("last_n", "keep_first_n") and payload.count is None:
+    if mode in ("last_n", "keep_first_n") and count is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="`count` is required for last_n and keep_first_n modes.",
         )
 
-    if payload.mode == "last_n":
-        # Most recently created N students (highest IDs)
+    if mode == "last_n":
         rows = (await db.execute(
-            select(Student.id).order_by(Student.id.desc()).limit(payload.count)
+            select(Student.id).order_by(Student.id.desc()).limit(count)
         )).scalars().all()
 
-    elif payload.mode == "keep_first_n":
-        # Keep the oldest `count` students, delete everyone beyond that
+    elif mode == "keep_first_n":
         keep_ids = (await db.execute(
-            select(Student.id).order_by(Student.id.asc()).limit(payload.count)
+            select(Student.id).order_by(Student.id.asc()).limit(count)
         )).scalars().all()
         rows = (await db.execute(
             select(Student.id).where(Student.id.notin_(keep_ids))
@@ -193,10 +180,10 @@ async def reset_students(
     deleted = await _delete_students_by_ids(db, list(rows))
 
     mode_label = {
-        "last_n": f"last {payload.count}",
-        "keep_first_n": f"all except first {payload.count}",
+        "last_n": f"last {count}",
+        "keep_first_n": f"all except first {count}",
         "generated_all": "all generated (GEN prefix)",
-    }[payload.mode]
+    }[mode]
 
     return ResetStudentsResponse(
         students_deleted=deleted,
