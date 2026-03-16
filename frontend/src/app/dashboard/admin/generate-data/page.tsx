@@ -68,8 +68,15 @@ export default function GenerateDataPage() {
       const { data: res } = await api.post<GenerateStudentsResponse>("/students/generate", data);
       setResult(res);
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      setGenError(e?.response?.data?.detail ?? "Generation failed. Check backend logs.");
+      const e = err as { response?: { data?: { detail?: unknown } } };
+      const detail = e?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+          ? (detail as { msg?: string }[]).map((d) => d.msg ?? JSON.stringify(d)).join("; ")
+          : "Generation failed. Check backend logs.";
+      setGenError(msg);
     }
   };
 
@@ -84,14 +91,19 @@ export default function GenerateDataPage() {
     setResetError(null);
     setResetResult(null);
     try {
-      const { data } = await api.delete("/students/reset", {
-        data: { mode: resetMode, count },
-      });
+      const { data } = await api.post("/students/reset", { mode: resetMode, count });
       setResetResult({ deleted: data.students_deleted, message: data.message });
       setResetConfirm(false);
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      setResetError(e?.response?.data?.detail ?? "Reset failed. Check backend logs.");
+      const e = err as { response?: { data?: { detail?: unknown } } };
+      const detail = e?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+          ? (detail as { msg?: string }[]).map((d) => d.msg ?? JSON.stringify(d)).join("; ")
+          : "Reset failed. Check backend logs.";
+      setResetError(msg);
     } finally {
       setResetLoading(false);
     }

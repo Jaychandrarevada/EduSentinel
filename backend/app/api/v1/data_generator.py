@@ -148,7 +148,7 @@ async def _delete_students_by_ids(db: AsyncSession, student_ids: list[int]) -> i
     return len(student_ids)
 
 
-@router.delete(
+@router.post(
     "/reset",
     response_model=ResetStudentsResponse,
     status_code=status.HTTP_200_OK,
