@@ -1,12 +1,20 @@
 """Data generator router — POST /students/generate"""
+from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, require_role
+from app.models.alert import Alert
+from app.models.academic_record import AcademicRecord
+from app.models.assignment import Assignment
+from app.models.attendance import Attendance
 from app.models.course import Course
 from app.models.enrollment import Enrollment
+from app.models.lms_activity import LMSActivity
+from app.models.prediction import Prediction
 from app.models.student import Student
 from app.models.user import Role, User
 from app.utils.data_generator import generate_and_insert_students
@@ -100,3 +108,101 @@ async def enroll_all_students(
         "enrollments_created": len(new_enrollments),
         "message": f"Created {len(new_enrollments)} new enrollment(s). Faculty dashboard will now show students.",
     }
+
+
+# ── Reset / bulk-delete generated students ────────────────────────────────────
+
+class ResetStudentsRequest(BaseModel):
+    mode: Literal["last_n", "keep_first_n", "generated_all"] = Field(
+        description=(
+            "last_n       — delete the most recently created N students\n"
+            "keep_first_n — keep the oldest N, delete everyone else\n"
+            "generated_all— delete every student whose roll_no starts with 'GEN'"
+        )
+    )
+    count: Optional[int] = Field(
+        default=None, ge=1, le=10000,
+        description="Required for last_n and keep_first_n modes.",
+    )
+
+
+class ResetStudentsResponse(BaseModel):
+    students_deleted: int
+    message: str
+
+
+async def _delete_students_by_ids(db: AsyncSession, student_ids: list[int]) -> int:
+    """Delete all data for the given student IDs and return the number deleted."""
+    if not student_ids:
+        return 0
+    id_set = student_ids  # already a list
+    await db.execute(delete(Alert).where(Alert.student_id.in_(id_set)))
+    await db.execute(delete(Prediction).where(Prediction.student_id.in_(id_set)))
+    await db.execute(delete(LMSActivity).where(LMSActivity.student_id.in_(id_set)))
+    await db.execute(delete(Assignment).where(Assignment.student_id.in_(id_set)))
+    await db.execute(delete(AcademicRecord).where(AcademicRecord.student_id.in_(id_set)))
+    await db.execute(delete(Attendance).where(Attendance.student_id.in_(id_set)))
+    await db.execute(delete(Enrollment).where(Enrollment.student_id.in_(id_set)))
+    await db.execute(delete(Student).where(Student.id.in_(id_set)))
+    await db.commit()
+    return len(student_ids)
+
+
+@router.delete(
+    "/reset",
+    response_model=ResetStudentsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk-delete generated students",
+)
+async def reset_students(
+    payload: ResetStudentsRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Bulk-delete generated students and all their related data.
+
+    Modes
+    ─────
+    last_n        Delete the most recently created `count` students.
+    keep_first_n  Keep the oldest `count` students, delete the rest.
+    generated_all Delete ALL students whose roll_no begins with 'GEN'.
+    """
+    if payload.mode in ("last_n", "keep_first_n") and payload.count is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="`count` is required for last_n and keep_first_n modes.",
+        )
+
+    if payload.mode == "last_n":
+        # Most recently created N students (highest IDs)
+        rows = (await db.execute(
+            select(Student.id).order_by(Student.id.desc()).limit(payload.count)
+        )).scalars().all()
+
+    elif payload.mode == "keep_first_n":
+        # Keep the oldest `count` students, delete everyone beyond that
+        keep_ids = (await db.execute(
+            select(Student.id).order_by(Student.id.asc()).limit(payload.count)
+        )).scalars().all()
+        rows = (await db.execute(
+            select(Student.id).where(Student.id.notin_(keep_ids))
+        )).scalars().all()
+
+    else:  # generated_all
+        rows = (await db.execute(
+            select(Student.id).where(Student.roll_no.like("GEN%"))
+        )).scalars().all()
+
+    deleted = await _delete_students_by_ids(db, list(rows))
+
+    mode_label = {
+        "last_n": f"last {payload.count}",
+        "keep_first_n": f"all except first {payload.count}",
+        "generated_all": "all generated (GEN prefix)",
+    }[payload.mode]
+
+    return ResetStudentsResponse(
+        students_deleted=deleted,
+        message=f"Deleted {deleted} student(s) ({mode_label}) and all their related records.",
+    )
