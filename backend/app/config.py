@@ -60,8 +60,10 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_db_url(cls, v: str) -> str:
-        if not v.startswith(("postgresql", "sqlite")):
-            raise ValueError("Only PostgreSQL and SQLite are supported")
+        # Accept all PostgreSQL URL variants (postgres://, postgresql://, +asyncpg, +psycopg2)
+        # and SQLite. Render.com provides the "postgres://" short form.
+        if not v.startswith(("postgresql", "postgres", "sqlite")):
+            raise ValueError("Only PostgreSQL and SQLite DATABASE_URLs are supported")
         return v
 
 

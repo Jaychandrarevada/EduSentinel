@@ -15,6 +15,26 @@ from app.config import settings
 _url = settings.DATABASE_URL
 _is_sqlite = _url.startswith("sqlite")
 
+def _to_async_url(url: str) -> str:
+    """
+    Convert any PostgreSQL URL variant to the asyncpg async scheme.
+
+    Handles all formats Render, Railway, Supabase, and local envs may provide:
+      postgres://...           → postgresql+asyncpg://...
+      postgresql://...         → postgresql+asyncpg://...
+      postgresql+psycopg2://.. → postgresql+asyncpg://...
+      postgresql+asyncpg://..  → unchanged
+    """
+    if url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + url[len("postgres://"):]
+    if url.startswith("postgresql+asyncpg://"):
+        return url
+    if url.startswith("postgresql+psycopg2://"):
+        return "postgresql+asyncpg://" + url[len("postgresql+psycopg2://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
 if _is_sqlite:
     # SQLite: use aiosqlite driver, no connection pool settings
     _async_url = _url.replace("sqlite://", "sqlite+aiosqlite://")
@@ -25,9 +45,7 @@ if _is_sqlite:
     )
 else:
     # PostgreSQL: use asyncpg driver with connection pooling
-    _async_url = _url.replace(
-        "postgresql://", "postgresql+asyncpg://"
-    ).replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    _async_url = _to_async_url(_url)
     engine = create_async_engine(
         _async_url,
         pool_size=settings.DB_POOL_SIZE,

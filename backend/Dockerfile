@@ -22,4 +22,6 @@ COPY --chown=appuser:appgroup . .
 USER appuser
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# 2 workers: safe for Render free tier (512 MB RAM).
+# Upgrade to --workers 4 on Starter plan (2 GB RAM).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

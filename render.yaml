@@ -1,0 +1,109 @@
+################################################################################
+#  EduSentinel — Render.com Infrastructure as Code
+#
+#  Services defined here:
+#    1. edusentinel-api  — FastAPI backend (Docker Web Service)
+#    2. edusentinel-db   — PostgreSQL 16 managed database
+#
+#  HOW TO DEPLOY
+#  ─────────────
+#  1. Push this repo to GitHub (public or private).
+#  2. In Render dashboard → New → Blueprint → connect your repo.
+#  3. Render reads this file and provisions both services automatically.
+#  4. After first deploy, open the Web Service → Environment tab and set:
+#        JWT_SECRET_KEY   = (run: python -c "import secrets;print(secrets.token_hex(32))")
+#        CORS_ORIGINS     = ["https://YOUR-APP.vercel.app","http://localhost:3000"]
+#  5. Save → Render redeploys with the correct values.
+#  6. Seed demo data: POST https://edusentinel-api.onrender.com/api/v1/admin/seed-demo
+#
+#  FREE-TIER NOTES
+#  ───────────────
+#  • Free web service sleeps after 15 min of inactivity — first request after
+#    sleep takes ~30 seconds (cold start). Upgrade to Starter ($7/mo) to avoid.
+#  • Free PostgreSQL expires after 90 days. Back up data before then.
+#  • DB_POOL_SIZE=5 + 2 workers = max 14 PG connections (safe for free tier).
+################################################################################
+
+databases:
+  - name: edusentinel-db
+    databaseName: edusentinel
+    user: edu_user
+    plan: free            # options: free | starter | standard | pro
+
+services:
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
+  - type: web
+    name: edusentinel-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free            # options: free | starter | standard | pro
+    healthCheckPath: /health/live
+    # How long Render waits before marking the health check as failed
+    # Free tier cold starts can be slow — keep this generous
+    autoDeploy: true
+
+    envVars:
+      # ── Application ─────────────────────────────────────────────────────────
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: APP_VERSION
+        value: "1.0.0"
+
+      # ── Database ─────────────────────────────────────────────────────────────
+      # Render injects the internal (low-latency) connection string automatically.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: edusentinel-db
+          property: connectionString
+
+      # Free tier PG: keep pool small (97 total connections, 2 uvicorn workers)
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
+
+      # ── JWT ──────────────────────────────────────────────────────────────────
+      # IMPORTANT: set JWT_SECRET_KEY manually in the Render dashboard.
+      # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+      # Leaving this as a placeholder — Render will show a warning until set.
+      - key: JWT_SECRET_KEY
+        value: "REPLACE_ME_WITH_SECURE_SECRET_32_CHARS_MIN"
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+
+      # ── CORS ─────────────────────────────────────────────────────────────────
+      # IMPORTANT: after Vercel deploy, update this to your actual Vercel URL.
+      # Example: ["https://edu-sentinel.vercel.app","http://localhost:3000"]
+      - key: CORS_ORIGINS
+        value: '["https://edusentinel.vercel.app","http://localhost:3000","http://localhost:3001"]'
+
+      # ── ML Service ───────────────────────────────────────────────────────────
+      # The backend has a heuristic fallback — ML service is optional.
+      # If you deploy a separate ML service, update ML_SERVICE_URL here.
+      - key: ML_SERVICE_URL
+        value: "http://localhost:8001"
+      - key: ML_REQUEST_TIMEOUT
+        value: "30"
+
+      # ── Email / Notifications (optional) ────────────────────────────────────
+      # Leave NOTIFICATION_ENABLED=false to skip email alerts.
+      # To enable: set NOTIFICATION_ENABLED=true and fill SMTP_* values.
+      - key: NOTIFICATION_ENABLED
+        value: "false"
+      - key: SMTP_HOST
+        value: ""
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: ""
+      - key: SMTP_PASSWORD
+        value: ""
+      - key: SMTP_FROM_EMAIL
+        value: "noreply@edusentinel.dev"

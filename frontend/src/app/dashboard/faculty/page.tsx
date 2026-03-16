@@ -7,8 +7,9 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Users, AlertTriangle, BarChart2, ChevronRight,
-  TrendingUp, BookOpen, Activity, Search,
+  BookOpen, Activity, Search, Mail, CheckCircle,
 } from "lucide-react";
+import api from "@/lib/api";
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -89,6 +90,8 @@ export default function FacultyDashboardPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL");
   const [search, setSearch] = useState("");
   const [allPage, setAllPage] = useState(1);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ sent: number; attempted: number } | null>(null);
 
   // Dashboard summary (KPIs + charts)
   const { data: dash, loading: dashLoading } = useFacultyDashboard();
@@ -121,6 +124,20 @@ export default function FacultyDashboardPage() {
   const subjectData = dash?.subject_performance ?? [];
 
   const riskFilters: RiskFilter[] = ["ALL", "HIGH", "MEDIUM", "LOW"];
+
+  async function sendRiskEmails() {
+    const label = riskFilter === "ALL" ? "HIGH" : riskFilter;
+    setEmailSending(true);
+    setEmailResult(null);
+    try {
+      const { data } = await api.post("/alerts/send-emails", { risk_label: label });
+      setEmailResult({ sent: data.sent, attempted: data.attempted });
+    } catch {
+      setEmailResult({ sent: 0, attempted: 0 });
+    } finally {
+      setEmailSending(false);
+    }
+  }
 
   // ── Tab button helper ──
   function TabBtn({ id, label, count }: { id: Tab; label: string; count?: number }) {
@@ -371,25 +388,47 @@ export default function FacultyDashboardPage() {
       {/* ── AT-RISK TAB ──────────────────────────────────────────────────── */}
       {tab === "at-risk" && (
         <>
-          {/* Risk filter pills */}
-          <div className="flex flex-wrap gap-2">
-            {riskFilters.map((f) => (
-              <button key={f} onClick={() => setRiskFilter(f)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
-                  riskFilter === f
-                    ? f === "HIGH" ? "bg-red-600 text-white"
-                      : f === "MEDIUM" ? "bg-amber-500 text-white"
-                      : f === "LOW" ? "bg-green-600 text-white"
-                      : "bg-gray-700 text-white"
-                    : f === "HIGH" ? "bg-red-50 text-red-700 ring-1 ring-red-200"
-                      : f === "MEDIUM" ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
-                      : f === "LOW" ? "bg-green-50 text-green-700 ring-1 ring-green-200"
-                      : "bg-gray-100 text-gray-700"
-                }`}
+          {/* Risk filter pills + Send Emails button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {riskFilters.map((f) => (
+                <button key={f} onClick={() => { setRiskFilter(f); setEmailResult(null); }}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                    riskFilter === f
+                      ? f === "HIGH" ? "bg-red-600 text-white"
+                        : f === "MEDIUM" ? "bg-amber-500 text-white"
+                        : f === "LOW" ? "bg-green-600 text-white"
+                        : "bg-gray-700 text-white"
+                      : f === "HIGH" ? "bg-red-50 text-red-700 ring-1 ring-red-200"
+                        : f === "MEDIUM" ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                        : f === "LOW" ? "bg-green-50 text-green-700 ring-1 ring-green-200"
+                        : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {f === "ALL" ? "All Levels" : f.charAt(0) + f.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+
+            {/* Send email alerts button */}
+            <div className="flex items-center gap-3">
+              {emailResult && (
+                <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                  <CheckCircle className="h-4 w-4" />
+                  {emailResult.sent}/{emailResult.attempted} emails sent
+                </span>
+              )}
+              <button
+                onClick={sendRiskEmails}
+                disabled={emailSending || (atRiskData?.items.length ?? 0) === 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {f === "ALL" ? "All Levels" : f.charAt(0) + f.slice(1).toLowerCase()}
+                <Mail className="h-3.5 w-3.5" />
+                {emailSending
+                  ? "Sending…"
+                  : `Send Alerts (${riskFilter === "ALL" ? "HIGH" : riskFilter})`}
               </button>
-            ))}
+            </div>
           </div>
 
           {atRiskLoading ? (
