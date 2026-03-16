@@ -148,12 +148,8 @@ async def _delete_students_by_ids(db: AsyncSession, student_ids: list[int]) -> i
     return len(student_ids)
 
 
-@router.post(
-    "/reset",
-    response_model=ResetStudentsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Bulk-delete generated students",
-)
+@router.post("/reset", response_model=ResetStudentsResponse, status_code=200, summary="Bulk-delete generated students")
+@router.delete("/reset", response_model=ResetStudentsResponse, status_code=200, summary="Bulk-delete generated students (DELETE alias)")
 async def reset_students(
     payload: ResetStudentsRequest,
     db: AsyncSession = Depends(get_db),
