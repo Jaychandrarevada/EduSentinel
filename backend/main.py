@@ -7,6 +7,8 @@ Startup sequence:
   3. Register all routers under /api/v1
   4. Register exception handlers
   5. Add CORS, rate-limiting, and request-logging middleware
+
+build: f8673ac
 """
 from contextlib import asynccontextmanager
 
