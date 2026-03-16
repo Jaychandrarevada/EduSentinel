@@ -5,11 +5,20 @@ POST /admin/seed   — Seeds the database with default users, courses, and stude
                      Safe to call multiple times (idempotent).
                      ADMIN-only (production) or open once on a fresh database.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import case as sa_case, func, select
+from typing import Literal, Optional
 
-from app.dependencies import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import case as sa_case, delete, func, select
+
+from app.dependencies import get_db, require_role
+from app.models.alert import Alert
+from app.models.academic_record import AcademicRecord
+from app.models.assignment import Assignment
+from app.models.attendance import Attendance
+from app.models.lms_activity import LMSActivity
+from app.models.prediction import Prediction
 from app.models.user import User, Role
 from app.models.student import Student
 from app.models.course import Course
@@ -454,3 +463,72 @@ async def seed_demo(db: AsyncSession = Depends(get_db)):
             {"email": "faculty3@demo.com", "password": "demo123", "subject": "Computer Science & Data Structures"},
         ],
     }
+
+
+# ── Bulk-delete generated students ────────────────────────────────────────────
+
+class ResetStudentsResponse(BaseModel):
+    students_deleted: int
+    message: str
+
+
+@router.post("/reset-students", response_model=ResetStudentsResponse, status_code=200)
+async def reset_students(
+    mode: Literal["last_n", "keep_first_n", "generated_all"] = Query(...),
+    count: Optional[int] = Query(None, ge=1, le=10000),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Bulk-delete generated students and all their related data.
+    Pass parameters as query strings: ?mode=last_n&count=300
+
+    Modes
+    ─────
+    last_n        — delete the most recently created N students
+    keep_first_n  — keep the oldest N, delete everyone else
+    generated_all — delete every student whose roll_no starts with GEN
+    """
+    if mode in ("last_n", "keep_first_n") and count is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="`count` is required for last_n and keep_first_n modes.",
+        )
+
+    if mode == "last_n":
+        ids = (await db.execute(
+            select(Student.id).order_by(Student.id.desc()).limit(count)
+        )).scalars().all()
+    elif mode == "keep_first_n":
+        keep = (await db.execute(
+            select(Student.id).order_by(Student.id.asc()).limit(count)
+        )).scalars().all()
+        ids = (await db.execute(
+            select(Student.id).where(Student.id.notin_(keep))
+        )).scalars().all()
+    else:
+        ids = (await db.execute(
+            select(Student.id).where(Student.roll_no.like("GEN%"))
+        )).scalars().all()
+
+    if ids:
+        await db.execute(delete(Alert).where(Alert.student_id.in_(ids)))
+        await db.execute(delete(Prediction).where(Prediction.student_id.in_(ids)))
+        await db.execute(delete(LMSActivity).where(LMSActivity.student_id.in_(ids)))
+        await db.execute(delete(Assignment).where(Assignment.student_id.in_(ids)))
+        await db.execute(delete(AcademicRecord).where(AcademicRecord.student_id.in_(ids)))
+        await db.execute(delete(Attendance).where(Attendance.student_id.in_(ids)))
+        await db.execute(delete(Enrollment).where(Enrollment.student_id.in_(ids)))
+        await db.execute(delete(Student).where(Student.id.in_(ids)))
+        await db.commit()
+
+    mode_label = {
+        "last_n": f"last {count}",
+        "keep_first_n": f"all except first {count}",
+        "generated_all": "all generated (GEN prefix)",
+    }[mode]
+
+    return ResetStudentsResponse(
+        students_deleted=len(ids),
+        message=f"Deleted {len(ids)} student(s) ({mode_label}) and all their related records.",
+    )
