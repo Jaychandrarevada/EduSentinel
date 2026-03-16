@@ -11,7 +11,7 @@ class RiskFactor(BaseModel):
 
 
 class PredictionOut(BaseModel):
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
 
     id: int
     student_id: int
